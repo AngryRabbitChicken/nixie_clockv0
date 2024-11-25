@@ -1,5 +1,6 @@
 #include <Arduino.h>
 #include <SPI.h>
+#include <WiFiManager.h>
 
 // put function declarations here:
 // TODO: The transfer only works with an array of 8 Bit integers, therefore wirte the check for an array of 8 bit integers.
@@ -16,9 +17,11 @@ uint8_t nixie_buf[num_shift_regs];
 void setup()
 {
   // put your setup code here, to run once:
+  // Setup of the Serial connection for Debugging
   Serial.begin(9600);
   Serial.println("I successfully communicate!");
 
+  // Setup of a buffer storing for an exemplary Nixie Output configuration
   nixie_buf[0] = 0b00000000;
   nixie_buf[1] = 0b00000110;
   nixie_buf[2] = 0b00000000;
@@ -28,8 +31,26 @@ void setup()
   nixie_buf[6] = 0b00000001;
   nixie_buf[7] = 0b00000100;
 
+  // Setup of the SPI Interface, the baud rate is fixed by the combined output
+  // rise and fall time of the shift register.
   SPI.begin();
   SPI.beginTransaction(SPISettings(2500000, MSBFIRST, SPI_MODE0));
+
+  // Setup of a dynamical Wifi connection
+  WiFiManager wm;
+  bool res;
+  res = wm.autoConnect("NixieClock", "12345678"); // password protected ap
+
+  if (!res)
+  {
+    Serial.println("Failed to connect");
+    // ESP.restart();
+  }
+  else
+  {
+    // if you get here you have connected to the WiFi
+    Serial.println("connected...yaay :)");
+  }
 
   t_current = millis();
 }
@@ -70,7 +91,7 @@ bool legal_spi_transmission(uint8_t spi_buf[num_shift_regs])
         Serial.printf("I am at position %d.\n", i + 1 + j * 8);
         if (hi_bits > 1)
         {
-          return false; // If more then one bit is high in digits_per_nixie bits, then two number would light up at the same time, which we don't want.
+          return false; // If more then one bit is high in digits_per_nixie bits, then two numbers would light up at the same time, which we don't want.
         }
         hi_bits = 0;
       }
