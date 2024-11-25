@@ -28,6 +28,9 @@ void setup()
   nixie_buf[6] = 0b00000001;
   nixie_buf[7] = 0b00000100;
 
+  SPI.begin();
+  SPI.beginTransaction(SPISettings(2500000, MSBFIRST, SPI_MODE0));
+
   t_current = millis();
 }
 
@@ -43,6 +46,8 @@ void loop()
       Serial.println("Detected a legal SPI value!");
     else
       Serial.println("Detected an illegal SPI value!");
+
+    SPI.transfer(nixie_buf, num_shift_regs);
   }
 }
 
@@ -60,12 +65,12 @@ bool legal_spi_transmission(uint8_t spi_buf[num_shift_regs])
         hi_bits++;
       }
 
-      if ((i + 1 + j * 8) % 10 == 0)
+      if ((i + 1 + j * 8) % digits_per_nixie == 0) // Check how many bits are high, every 10 bits.
       {
         Serial.printf("I am at position %d.\n", i + 1 + j * 8);
         if (hi_bits > 1)
         {
-          return false;
+          return false; // If more then one bit is high in digits_per_nixie bits, then two number would light up at the same time, which we don't want.
         }
         hi_bits = 0;
       }
@@ -74,7 +79,7 @@ bool legal_spi_transmission(uint8_t spi_buf[num_shift_regs])
   return true;
 }
 
-void print_information(uint8_t *arr)
+void print_arr_size(uint8_t *arr)
 {
   uint8_t size = *(&arr + 1) - arr;
   Serial.println(size);
