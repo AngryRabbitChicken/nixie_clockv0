@@ -4,10 +4,20 @@
 #include <ESP8266WiFi.h>
 #include <WiFiUdp.h>
 
+#include "Nixie_Controller.h"
+
+#define CS D8 //The chip select pin connected to the shift regs is pin D8.
+
 // put function declarations here:
-// TODO: The transfer only works with an array of 8 Bit integers, therefore wirte the check for an array of 8 bit integers.
-// each integer then corrseponds to one shift reg. Trying a little change.
-bool legal_spi_transmission(uint8_t *);
+
+//turn on and off the high voltage PSU for the nixies
+void turn_hv_on();
+void turn_hv_off();
+
+//Check the buffer for integrity and send it.
+void send_nixie_buffer();
+
+//UDP stuff?
 void print_information(uint8_t *);
 void startUDP();
 void sendNTPpacket(IPAddress &);
@@ -17,9 +27,10 @@ uint32_t getTime();
 uint32_t t_current, t_sys;
 
 // Nixie control related
-const uint8_t num_shift_regs = 8;
+const uint8_t num_nixies = 6;
 const uint8_t digits_per_nixie = 10;
-uint8_t nixie_buf[num_shift_regs];
+uint8_t digit_counter = 1; //Remove later, this just for testing
+Nixie_Controller nxc;
 
 // UDP related
 WiFiUDP UDP;
@@ -35,58 +46,63 @@ void setup()
   Serial.begin(9600);
   Serial.println("I successfully communicate!");
 
-  // Setup of a buffer storing for an exemplary Nixie Output configuration
-  nixie_buf[0] = 0b00000000;
-  nixie_buf[1] = 0b00000110;
-  nixie_buf[2] = 0b00000000;
-  nixie_buf[3] = 0b00000000;
-  nixie_buf[4] = 0b00000001;
-  nixie_buf[5] = 0b00000000;
-  nixie_buf[6] = 0b00000001;
-  nixie_buf[7] = 0b00000100;
+
 
   // Setup of the SPI Interface, the baud rate is fixed by the combined output
   // rise and fall time of the shift register.
+  pinMode(CS, OUTPUT); //Chip select pin for SPI communication
   SPI.begin();
   SPI.beginTransaction(SPISettings(2500000, MSBFIRST, SPI_MODE0));
 
+  //Create a Nixie Controller instance
+  nxc = Nixie_Controller(num_nixies, digits_per_nixie);
+
+  //Write an empty buffer to the shift registers to get them into  a defined initial state.
+  send_nixie_buffer();
+  nxc.reset_nixie_buf();
+  
+
   // Setup of a dynamical Wifi connection
-  WiFiManager wm;
-  bool res;
-  wm.setConnectTimeout(60);                       // When the ESP cannot establish a connection with the saved network within 60 seconds, it will open an access point.
-  wm.setConfigPortalTimeout(180);                 // The autoConnect command will stop blocking the rest of the code after 180 seconds. Probably returning false.
-  res = wm.autoConnect("NixieClock", "12345678"); // password protected ap, this will store the last used AP in HW and reconnect on powerup. It also survives reprogrammings.
+  // WiFiManager wm;
+  // bool res;
+  // wm.setConnectTimeout(60);                       // When the ESP cannot establish a connection with the saved network within 60 seconds, it will open an access point.
+  // wm.setConfigPortalTimeout(180);                 // The autoConnect command will stop blocking the rest of the code after 180 seconds. Probably returning false.
+  // res = wm.autoConnect("NixieClock", "12345678"); // password protected ap, this will store the last used AP in HW and reconnect on powerup. It also survives reprogrammings.
 
-  if (!res)
-  {
-    Serial.println("Failed to connect");
-    // ESP.restart();
-  }
-  else
-  {
-    // if you get here you have connected to the WiFi
-    Serial.println("connected...yaay :)");
-  }
+  // if (!res)
+  // {
+  //   Serial.println("Failed to connect");
+  //   // ESP.restart();
+  // }
+  // else
+  // {
+  //   // if you get here you have connected to the WiFi
+  //   Serial.println("connected...yaay :)");
+  // }
 
-  if (WiFi.status() == WL_CONNECTED) // This one is just a test whether the WiFi handle is attached to the connection created by the WiFi manager.
-  {
-    Serial.println("Wifi confirms the connection.");
-  }
+  // if (WiFi.status() == WL_CONNECTED) // This one is just a test whether the WiFi handle is attached to the connection created by the WiFi manager.
+  // {
+  //   Serial.println("Wifi confirms the connection.");
+  // }
 
-  startUDP();
+  // startUDP();
 
-  if (!WiFi.hostByName(NTPServerName, timeServerIP))
-  { // Get the IP address of the NTP server
-    Serial.println("DNS lookup failed. Rebooting.");
-    Serial.flush();
-    ESP.reset();
-  }
-  Serial.print("Time server IP:\t");
-  Serial.println(timeServerIP);
+  // if (!WiFi.hostByName(NTPServerName, timeServerIP))
+  // { // Get the IP address of the NTP server
+  //   Serial.println("DNS lookup failed. Rebooting.");
+  //   Serial.flush();
+  //   ESP.reset();
+  // }
+  // Serial.print("Time server IP:\t");
+  // Serial.println(timeServerIP);
 
-  Serial.println("\r\nSending NTP request ...");
-  sendNTPpacket(timeServerIP);
+  // Serial.println("\r\nSending NTP request ...");
+  // sendNTPpacket(timeServerIP);
 
+  //Finally, set pin D0 to output and turn on the tubes.
+  pinMode(D0, OUTPUT);
+  turn_hv_on();
+  delay(1000);
   t_current = millis();
 }
 
@@ -98,45 +114,54 @@ void loop()
   if (t_sys >= t_current + 1000)
   {
     t_current = t_sys;
-    if (legal_spi_transmission(nixie_buf))
+    
+    for(int j = 0; j < num_shift_registers; j++)
+      Serial.println(nxc.nixie_buf[j], BIN);    
+    
+    if (nxc.check_buffer())
+    {
       Serial.println("Detected a legal SPI value!");
+      send_nixie_buffer(); //keep in mind, this checks for the nixie buffer integrity already. The if-else this is in is only for demo purpose.       
+    }
     else
+    {
       Serial.println("Detected an illegal SPI value!");
-
-    SPI.transfer(nixie_buf, num_shift_regs);
-
-    Serial.println("\r\nSending NTP request ...");
-    sendNTPpacket(timeServerIP);
-    Serial.println(getTime());
+    }
+     
+    nxc.reset_nixie_buf();
+    nxc.turn_on_tube(1, digit_counter);
+    nxc.turn_on_tube(2, 11 - digit_counter);
+    nxc.turn_on_tube(3, digit_counter);
+    nxc.turn_on_tube(4, 11 - digit_counter);
+    nxc.turn_on_tube(5, digit_counter);
+    nxc.turn_on_tube(6, 11 - digit_counter);
+    if (digit_counter == 10)
+    {
+      digit_counter = 0;
+    }
+    digit_counter ++;
   }
 }
 
 // put function definitions here:
 
-bool legal_spi_transmission(uint8_t spi_buf[num_shift_regs])
+void turn_hv_on()
 {
-  uint8_t hi_bits = 0;
-  for (int j = 0; j < num_shift_regs; j++)
-  {
-    for (int i = 0; i < 8; i++)
-    {
-      if ((spi_buf[j] >> i & 1))
-      {
-        hi_bits++;
-      }
+  digitalWrite(D0, LOW);
+}
+void turn_hv_off()
+{
+  digitalWrite(D0, HIGH);
+}
 
-      if ((i + 1 + j * 8) % digits_per_nixie == 0) // Check how many bits are high, every digits_per_nixie bits.
-      {
-        Serial.printf("I am at position %d.\n", i + 1 + j * 8);
-        if (hi_bits > 1)
-        {
-          return false; // If more then one bit is high in digits_per_nixie bits, then two numbers would light up at the same time, which we don't want.
-        }
-        hi_bits = 0;
-      }
-    }
-  }
-  return true;
+void send_nixie_buffer()
+{
+  if (nxc.check_buffer())
+  {
+    digitalWrite(CS, LOW);
+    SPI.transfer(nxc.nixie_buf, num_shift_registers);  
+    digitalWrite(CS, HIGH);
+  }  
 }
 
 void startUDP()
