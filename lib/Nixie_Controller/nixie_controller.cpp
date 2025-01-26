@@ -32,14 +32,17 @@ void Nixie_Controller::turn_on_digit(uint8_t digit)
 
 void Nixie_Controller::turn_on_tube(uint8_t tube, uint8_t digit)
 {
-    if(digit < 1 || digit > digits_per_nixie)
+    if(digit < 0 || digit > digits_per_nixie - 1)
     {
       errflg_illegal_digit = true;
       reset_nixie_buf();
       return;
     }
-    uint8_t digit_num = (tube - 1) * digits_per_nixie + digit;
-    turn_on_digit(digit_num);
+    if(digit == 0)
+    {
+      digit = 10;
+    }
+    turn_on_digit((tube - 1) * digits_per_nixie + digit);
 };
 
 bool Nixie_Controller::check_buffer()
