@@ -34,6 +34,13 @@ const char* ntpServer = "pool.ntp.org";
 const long  gmtOffset_sec = 3600 * 1;
 const int   daylightOffset_sec = 3600 * 0;
 
+//HTTP request related
+WiFiClient client;
+int HTTP_PORT = 80;
+String HTTP_METHOD = "GET";  // or POST
+char HOST_NAME[] = "maker.ifttt.com";
+String PATH_NAME = "/trigger";
+
 void setup()
 {
   // put your setup code here, to run once:
@@ -61,6 +68,26 @@ void setup()
   wm.setConfigPortalTimeout(180);                 // The autoConnect command will stop blocking the rest of the code after 180 seconds. Probably returning false.
   wm.autoConnect("NixieClock", "12345678"); // password protected ap, this will store the last used AP in HW and reconnect on powerup. It also survives reprogrammings.
  
+  //Get local time through Wifi
+  
+  client.connect(HOST_NAME, HTTP_PORT);
+  if (client.connected())
+  {
+    Serial.println("Connected to server");
+    client.println(HTTP_METHOD + " " + PATH_NAME + " HTTP/1.1");
+    client.println("Host: " + String(HOST_NAME));
+    client.println("Connection: close");
+    client.println(); // end HTTP request header
+  }
+  while (client.connected()) {
+  if (client.available()) {
+    // read an incoming byte from the server and print it to serial monitor:
+    char c = client.read();
+    Serial.print(c);
+  }
+}
+  
+
   configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
   turn_hv_on();
   t_current = millis();
@@ -90,6 +117,21 @@ void loop()
     {
       digit_counter = 0;
     }
+    if (client.connected())
+    {
+      if (client.available())
+      {    
+        char c = client.read();
+        Serial.print(c);
+      }
+    }
+    else
+    {
+      Serial.println("Client disconnected.");
+      client.stop();
+    }
+    
+
     
     printLocalTime();
   }
