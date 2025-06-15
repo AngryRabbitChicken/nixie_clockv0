@@ -41,6 +41,12 @@ const long gmtOffset_sec = 3600 * 1;
 const int daylightOffset_sec = 3600 * 0;
 
 // HTTP request related
+
+// In case we need help later, the webreq stuff is copied from here:
+/*
+  Complete project details: https://RandomNerdTutorials.com/esp8266-nodemcu-https-requests/
+  Based on the example created by Ivan Grokhotkov, 2015 (File > Examples > ESP8266WiFi > HTTPSRequests)
+*/
 WiFiClientSecure client;
 int HTTP_PORT = 443;
 String HTTP_METHOD = "GET"; // or POST
