@@ -1,7 +1,7 @@
 #include <Arduino.h>
 #include "certificates.h"
 
-const char TIMEAPI_ROOT[] PROGMEM = R"CERT(
+const char TIMEAPI_ROOT_CERT[] PROGMEM = R"CERT(
 -----BEGIN CERTIFICATE-----
 MIIF3jCCA8agAwIBAgIQAf1tMPyjylGoG7xkDjUDLTANBgkqhkiG9w0BAQwFADCB
 iDELMAkGA1UEBhMCVVMxEzARBgNVBAgTCk5ldyBKZXJzZXkxFDASBgNVBAcTC0pl
