@@ -9,10 +9,18 @@
 #include "Nixie_Controller.h"
 #include "certificates.h"
 
+/*
+DEBUG_LVL 1 to test Nixie control specfic code
+DEBUG_LVL 2 for https specific code
+DEBUG LVL 0 to run everything
+*/
+#define DEBUG_LVL 2 
+
 #define CS D8 // The chip select pin connected to the shift regs is pin D8.
 
 // put function declarations here:
 
+#if DEBUG_LVL == 1 or DEBUG_LVL == 0
 // turn on and off the high voltage PSU for the nixies
 void turn_hv_on();
 void turn_hv_off();
@@ -20,27 +28,26 @@ void turn_hv_off();
 // Check the buffer for integrity and send it.
 void send_nixie_buffer();
 
+// Nixie control related
+const uint8_t num_nixies = 6;
+const uint8_t digits_per_nixie = 10;
+volatile uint8_t digit_counter = 0; // Remove later, this just for testing
+Nixie_Controller nxc;
+#endif
+
+#if DEBUG_LVL == 2 or DEBUG_LVL ==0
 // Print the NTP time
 void printLocalTime();
 
 // https requests
 String https_request(String, const char *);
 
-// general
-uint32_t t_current, t_sys;
-
-// Nixie control related
-const uint8_t num_nixies = 6;
-const uint8_t digits_per_nixie = 10;
-volatile uint8_t digit_counter = 0; // Remove later, this just for testing
-Nixie_Controller nxc;
-
 // Time request related
 const char *ntpServer = "pool.ntp.org";
-const long gmtOffset_sec = 3600 * 1;
-const int daylightOffset_sec = 3600 * 0;
+const long gmtOffset_sec = 0;
+const int daylightOffset_sec = 0;
 
-// HTTP request related
+// HTTPS request related
 
 // In case we need help later, the webreq stuff is copied from here:
 /*
@@ -80,6 +87,10 @@ char TIMEAPI_CERT[] =
     "-----END CERTIFICATE-----\n";
 X509List cert(TIMEAPI_CERT);
 HTTPClient sender;
+#endif
+
+// general
+uint32_t t_current, t_sys;
 
 void setup()
 {
@@ -88,6 +99,7 @@ void setup()
   Serial.begin(9600);
   Serial.println("I successfully communicate!");
 
+  #if DEBUG_LVL == 1 or DEBUG_LVL == 0
   pinMode(CS, OUTPUT); // Chip select pin for SPI communication
   pinMode(D0, OUTPUT); // Setup pin to toggle the HV PSU for the tubes.
 
@@ -101,20 +113,23 @@ void setup()
   // Write an empty buffer to the shift registers to get them into  a defined initial state.
   send_nixie_buffer();
   nxc.reset_nixie_buf();
+  turn_hv_on();
+  #endif
 
+  #if DEBUG_LVL == 2 or DEBUG_LVL == 0
   // Setup of a dynamical Wifi connection
   WiFiManager wm;
   wm.setConnectTimeout(60);                 // When the ESP cannot establish a connection with the saved network within 60 seconds, it will open an access point.
   wm.setConfigPortalTimeout(180);           // The autoConnect command will stop blocking the rest of the code after 180 seconds. Probably returning false.
   wm.autoConnect("NixieClock", "12345678"); // password protected ap, this will store the last used AP in HW and reconnect on powerup. It also survives reprogrammings.
 
-  client.setInsecure(); // TODO: Remove, we are getting secure over here ;)
-  configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
-  turn_hv_on();
-  t_current = millis();
-
+  //client.setInsecure(); // TODO: Remove, we are getting secure over here ;)
   // Set time via NTP, as required for x.509 validation
-  configTime(3 * 3600, 0, "pool.ntp.org", "time.nist.gov");
+  configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
+  setenv("TZ", "Europe/Rome", 1);
+
+  /* // Set time via NTP, as required for x.509 validation
+  configTime(3 * 3600, 0, "pool.ntp.org", "time.nist.gov"); */
 
   Serial.print("Waiting for NTP time sync: ");
   time_t now = time(nullptr);
@@ -129,6 +144,9 @@ void setup()
   gmtime_r(&now, &timeinfo);
   Serial.print("Current time: ");
   Serial.print(asctime(&timeinfo));
+  #endif
+
+  t_current = millis();
 }
 
 void loop()
@@ -139,7 +157,8 @@ void loop()
   if (t_sys >= t_current + 1000)
   {
     t_current = t_sys;
-
+    
+    #if DEBUG_LVL == 1 or DEBUG_LVL == 0
     nxc.turn_on_tube(5, digit_counter / 10); // dcf_ping_counter / 10);
     nxc.turn_on_tube(6, digit_counter % 10); // dcf_ping_counter % 10);
     send_nixie_buffer();
@@ -155,13 +174,16 @@ void loop()
     {
       digit_counter = 0;
     }
+    #endif
+
+    #if DEBUG_LVL == 2 or DEBUG_LVL == 0
     printLocalTime();
 
     // Get local time through Wifi
     if ((WiFi.status() == WL_CONNECTED))
     {
       String https_payload_ip = https_request("https://api.ipify.org/?format=json", IPFIY_ROOT_CERT);
-      String https_payload_tz = https_request("https://timeapi.io/api/time/current/zone?timeZone=Europe%2FAmsterdam", TIMEAPI_ROOT_CERT);
+      String https_payload_tz = https_request("https://timeapi.io/api/timezone/ip?ipAddress=237.71.232.203", TIMEAPI_CERT);
       Serial.println(https_payload_ip);
       JsonDocument doc;
       deserializeJson(doc, https_payload_ip);
@@ -176,10 +198,12 @@ void loop()
     {
       Serial.println("Wifi not connected, cannot do HTTPS req.");
     }
+    #endif
   }
 }
 // put function definitions here:
 
+#if DEBUG_LVL == 1 or DEBUG_LVL == 0
 void turn_hv_on()
 {
   digitalWrite(D0, LOW);
@@ -200,7 +224,9 @@ void send_nixie_buffer()
     digitalWrite(CS, HIGH);
   }
 }
+#endif
 
+#if DEBUG_LVL == 2 or DEBUG_LVL == 0
 void printLocalTime()
 {
   time_t rawtime;
@@ -247,3 +273,4 @@ String https_request(String request, const char *certificate)
   }
   return payload;
 }
+#endif
