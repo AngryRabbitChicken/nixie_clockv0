@@ -1,13 +1,12 @@
 #include <Arduino.h>
 #include <SPI.h>
 #include <WiFiManager.h>
-#include <ESP8266WiFi.h>
-#include <ESP8266HTTPClient.h>
 #include <time.h>
 #include <ArduinoJson.h>
 
 #include "Nixie_Controller.h"
 #include "certificates.h"
+#include "web_request.h"
 
 /*
 DEBUG_LVL 1 to test Nixie control specfic code
@@ -39,22 +38,21 @@ Nixie_Controller nxc;
 // Print the NTP time
 void printLocalTime();
 
-// https requests
-String https_request(String, const char *);
-
 // Time request related
 const char *ntpServer = "pool.ntp.org";
 const long gmtOffset_sec = 0;
 const int daylightOffset_sec = 0;
 
 // HTTPS request related
+//String http_get_request(const char*);
+//String https_get_request(String, const char*);
 
 // In case we need help later, the webreq stuff is copied from here:
 /*
   Complete project details: https://RandomNerdTutorials.com/esp8266-nodemcu-https-requests/
   Based on the example created by Ivan Grokhotkov, 2015 (File > Examples > ESP8266WiFi > HTTPSRequests)
 */
-WiFiClientSecure client;
+/* WiFiClientSecure client;
 int HTTP_PORT = 443;
 String HTTP_METHOD = "GET"; // or POST
 char HOST_NAME[] = "timeapi.io";
@@ -86,7 +84,7 @@ char TIMEAPI_CERT[] =
     "4gkJxoCa5FiaowHzpTbVsGh7xG8=\n"
     "-----END CERTIFICATE-----\n";
 X509List cert(TIMEAPI_CERT);
-HTTPClient sender;
+HTTPClient sender; */
 #endif
 
 // general
@@ -182,8 +180,9 @@ void loop()
     // Get local time through Wifi
     if ((WiFi.status() == WL_CONNECTED))
     {
-      String https_payload_ip = https_request("https://api.ipify.org/?format=json", IPFIY_ROOT_CERT);
-      String https_payload_tz = https_request("https://timeapi.io/api/timezone/ip?ipAddress=237.71.232.203", TIMEAPI_CERT);
+      String https_payload_tz = http_get_request("http://ip-api.com/json/5.90.48.177?fields=offset");
+      String https_payload_ip = https_get_request("https://api.ipify.org/?format=json", IPIFY_ROOT_CERT); //replace with GTS root R4
+     
       Serial.println(https_payload_ip);
       JsonDocument doc;
       deserializeJson(doc, https_payload_ip);
@@ -236,7 +235,7 @@ void printLocalTime()
   Serial.println(asctime(timeinfo));
 }
 
-String https_request(String request, const char *certificate)
+/* String https_get_request(String request, const char *certificate)
 {
   WiFiClientSecure client;
   HTTPClient https;
@@ -253,7 +252,7 @@ String https_request(String request, const char *certificate)
     // httpCode will be negative on error
     if (httpCode > 0)
     {
-      // HTTP header has been send and Server response header has been handled
+      // HTTP header has been sent and Server response header has been handled
       // file found at server
       if (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_MOVED_PERMANENTLY)
       {
@@ -273,4 +272,34 @@ String https_request(String request, const char *certificate)
   }
   return payload;
 }
+
+String http_get_request(const char* serverName) {
+  WiFiClient client;
+  HTTPClient http;
+    
+  // Your IP address with path or Domain name with URL path 
+  http.begin(client, serverName);
+  
+  // If you need Node-RED/server authentication, insert user and password below
+  //http.setAuthorization("REPLACE_WITH_SERVER_USERNAME", "REPLACE_WITH_SERVER_PASSWORD");
+  
+  // Send HTTP POST request
+  int httpResponseCode = http.GET();
+  
+  String payload = "{}"; 
+  
+  if (httpResponseCode>0) {
+    Serial.print("HTTP Response code: ");
+    Serial.println(httpResponseCode);
+    payload = http.getString();
+  }
+  else {
+    Serial.print("Error code: ");
+    Serial.println(httpResponseCode);
+  }
+  // Free resources
+  http.end();
+
+  return payload;
+} */
 #endif
