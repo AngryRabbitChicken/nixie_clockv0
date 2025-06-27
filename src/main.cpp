@@ -180,16 +180,17 @@ void loop()
     // Get local time through Wifi
     if ((WiFi.status() == WL_CONNECTED))
     {
-      request_payload https_payload_tz_2 = http_get_request("http://ip-api.com/json/5.90.48.177?fields=offset");
-      request_payload https_payload_tz = https_get_request("https://timeapi.io/api/time/current/zone?timeZone=Europe%2FAmsterdam", TIMEAPI_ROOT_CERT);
+      //request_payload https_payload_tz_2 = http_get_request("http://ip-api.com/json/5.90.48.177?fields=offset");
+      
       request_payload https_payload_ip = https_get_request("https://api.ipify.org/?format=json", IPIFY_ROOT_CERT); //replace with GTS root R4
-     
+      
       Serial.println(https_payload_ip.value);
       JsonDocument doc;
       deserializeJson(doc, https_payload_ip.value);
       String ip = doc["ip"];
+
+      request_payload https_payload_tz = https_get_request("https://timeapi.io/api/time/current/ip?ipAddress=" + ip, TIMEAPI_ROOT_CERT);
       Serial.println(ip);
-      Serial.println(https_payload_tz_2.value);
       Serial.println(https_payload_tz.value);
       deserializeJson(doc, https_payload_tz.value);
       String hour = doc["hour"];
