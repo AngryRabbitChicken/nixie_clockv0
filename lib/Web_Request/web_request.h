@@ -3,7 +3,13 @@
 
 #include <Arduino.h>
 
-String http_get_request(String);
-String https_get_request(String, const char *);
+struct request_payload
+{
+    String value;
+    int http_code;
+};
+
+request_payload http_get_request(String);
+request_payload https_get_request(String, const char *);
 
 #endif

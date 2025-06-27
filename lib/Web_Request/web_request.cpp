@@ -4,70 +4,82 @@
 
 #include "web_request.h"
 
-String https_get_request(String request, const char *certificate)
+request_payload _generic_request(WiFiClient client, String request)
 {
-  WiFiClientSecure client;
-  HTTPClient https;
-  String payload;
-  X509List cert(certificate);
-  client.setTrustAnchors(&cert);
-  // client.setInsecure();
+    HTTPClient http;    
+    request_payload answer;
 
-  if (https.begin(client, request))
-  { // HTTPS
-    // start connection and send HTTP header
-    int httpCode = https.GET();
-
-    // httpCode will be negative on error
-    if (httpCode > 0)
+    // Your IP address with path or Domain name with URL path 
+    if (http.begin(client, request))
     {
-      // HTTP header has been sent and Server response header has been handled
-      // file found at server
-      if (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_MOVED_PERMANENTLY)
-      {
-        payload = https.getString();
-      }
+        answer.http_code = http.GET();
+
+        if (answer.http_code > 0) 
+        {
+            if (answer.http_code == HTTP_CODE_OK || answer.http_code == HTTP_CODE_MOVED_PERMANENTLY)
+            {
+                answer.value = http.getString();
+            }
+        }
+        else 
+        {
+            answer.value = http.errorToString(answer.http_code).c_str();
+        }
+    // Free resources
+    http.end();
     }
     else
     {
-      payload = https.errorToString(httpCode).c_str();
+        answer.value = "[HTTP] Unable to connect";
+        answer.http_code = 0;
     }
-
-    https.end();
-  }
-  else
-  {
-    payload = "[HTTPS] Unable to connect";
-  }
-  return payload;
+    return answer;
 }
 
-String http_get_request(String serverName) {
-  WiFiClient client;
-  HTTPClient http;
-    
-  // Your IP address with path or Domain name with URL path 
-  http.begin(client, serverName);
-  
-  // If you need Node-RED/server authentication, insert user and password below
-  //http.setAuthorization("REPLACE_WITH_SERVER_USERNAME", "REPLACE_WITH_SERVER_PASSWORD");
-  
-  // Send HTTP POST request
-  int httpResponseCode = http.GET();
-  
-  String payload = "{}"; 
-  
-  if (httpResponseCode>0) {
-    Serial.print("HTTP Response code: ");
-    Serial.println(httpResponseCode);
-    payload = http.getString();
-  }
-  else {
-    Serial.print("Error code: ");
-    Serial.println(httpResponseCode);
-  }
-  // Free resources
-  http.end();
+request_payload _generic_request(WiFiClientSecure client, String request)
+{
+    HTTPClient http;    
+    request_payload answer;
 
-  return payload;
+    // Your IP address with path or Domain name with URL path 
+    if (http.begin(client, request))
+    {
+        answer.http_code = http.GET();
+
+        if (answer.http_code > 0) 
+        {
+            if (answer.http_code == HTTP_CODE_OK || answer.http_code == HTTP_CODE_MOVED_PERMANENTLY)
+            {
+                answer.value = http.getString();
+            }
+        }
+        else 
+        {
+            answer.value = http.errorToString(answer.http_code).c_str();
+        }
+    // Free resources
+    http.end();
+    }
+    else
+    {
+        answer.value = "[HTTP] Unable to connect";
+        answer.http_code = 0;
+    }
+    return answer;
+}
+
+request_payload http_get_request(String request) 
+{
+    WiFiClient client;
+    HTTPClient http;
+    return _generic_request(client, request);
+}
+
+request_payload https_get_request(String request, const char * certificate) 
+{
+    WiFiClientSecure client;
+    HTTPClient https;  
+    X509List cert(certificate);
+    client.setTrustAnchors(&cert);
+    return _generic_request(client, request);
 }
